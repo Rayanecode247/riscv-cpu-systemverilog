@@ -14,6 +14,12 @@ module data_memory #(
 
     logic [7:0] mem [0:BYTES-1];
 
+    initial begin
+        for (int i = 0; i < BYTES; i++) begin
+            mem[i] = 8'h00;
+        end
+    end
+
     logic in_bounds_b0, in_bounds_b1, in_bounds_b2, in_bounds_b3;
 
     assign in_bounds_b0 = (addr     < BYTES);
@@ -53,11 +59,11 @@ module data_memory #(
         read_data = '0;
         if (mem_read) begin
             unique case (funct3)
-                3'b000:  read_data = {{24{byte0[7]}}, byte0};                 // LB
-                3'b001:  read_data = {{16{byte1[7]}}, byte1, byte0};          // LH
-                3'b010:  read_data = {byte3, byte2, byte1, byte0};           // LW
-                3'b100:  read_data = {24'b0, byte0};                         // LBU
-                3'b101:  read_data = {16'b0, byte1, byte0};                  // LHU
+                3'b000:  read_data = {{24{byte0[7]}}, byte0};
+                3'b001:  read_data = {{16{byte1[7]}}, byte1, byte0};
+                3'b010:  read_data = {byte3, byte2, byte1, byte0};
+                3'b100:  read_data = {24'b0, byte0};
+                3'b101:  read_data = {16'b0, byte1, byte0};
                 default: read_data = '0;
             endcase
         end
