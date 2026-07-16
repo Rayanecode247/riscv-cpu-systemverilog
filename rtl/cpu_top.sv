@@ -52,6 +52,7 @@ module cpu_top #(
     logic [31:0] e_alu_result;
     logic       e_zero;
     logic [31:0] e_branch_target;
+    logic       e_branch_taken;
     logic       e_redirect_valid;
     logic [31:0] e_redirect_target;
 
@@ -266,7 +267,16 @@ module cpu_top #(
 
     assign e_branch_target = e_pc + e_immediate;
 
-    assign e_redirect_valid   = e_jump | (e_branch & e_zero);
+    // Branch condition: alu_op==2'b01 always computes rs1-rs2 (SUB) regardless
+    // of funct3, so `zero` alone only gives correct semantics for BEQ
+    // (funct3=000). BNE (funct3=001) must branch when NOT equal, so we invert
+    // zero using funct3[0]. NOTE: BLT/BGE/BLTU/BGEU (funct3 100/101/110/111)
+    // are NOT supported by this datapath yet -- that would require alu_control
+    // to select SLT/SLTU for the branch alu_op case based on funct3, which is
+    // not implemented here. Only BEQ/BNE are functionally correct today.
+    assign e_branch_taken = e_branch & (e_funct3[0] ? ~e_zero : e_zero);
+
+    assign e_redirect_valid   = e_jump | e_branch_taken;
     assign e_redirect_target  = e_jump ? e_alu_result : e_branch_target;
     assign pc_redirect_valid  = e_redirect_valid;
     assign pc_redirect_target = e_redirect_target;
