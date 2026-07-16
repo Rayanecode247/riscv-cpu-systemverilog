@@ -17,6 +17,6 @@ module instruction_memory #(
     end
 
     assign word_addr   = addr[$clog2(DEPTH)+1:2];
-    assign instruction = (addr[$clog2(DEPTH)+1:2] < DEPTH) ? mem[word_addr] : NOP;
+    assign instruction = (addr < (DEPTH * 4)) ? mem[word_addr] : NOP;
 
 endmodule
