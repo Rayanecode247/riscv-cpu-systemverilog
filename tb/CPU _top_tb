@@ -1,0 +1,268 @@
+`timescale 1ns / 1ps
+
+module cpu_top_tb;
+
+    logic clk;
+    logic reset;
+
+    localparam int CLK_PERIOD = 10;
+
+    localparam int DEFAULT_MAX_CYCLES  = 2000;
+    localparam int HALT_REPEAT_THRESH  = 8;
+
+    int max_cycles;
+    bit debug_en;
+    string test_name;
+    string expected_regs_file;
+    string expected_mem_file;
+
+    int    total_checks;
+    int    failed_checks;
+    bit    sim_timed_out;
+    bit    halted;
+
+    cpu_top #(
+        .IMEM_DEPTH(1024),
+        .DMEM_DEPTH(1024)
+    ) dut (
+        .clk(clk),
+        .reset(reset)
+    );
+
+    always #(CLK_PERIOD/2) clk = ~clk;
+
+    initial begin
+        clk   = 1'b0;
+        reset = 1'b1;
+        repeat (2) @(posedge clk);
+        reset = 1'b0;
+    end
+
+    int cycle_count;
+
+    always_ff @(posedge clk) begin
+        if (reset)
+            cycle_count <= 0;
+        else
+            cycle_count <= cycle_count + 1;
+    end
+
+    always_ff @(posedge clk) begin
+        if (!reset && debug_en) begin
+            $display("[cycle %0d] PC=%h IF_instr=%h ID_instr=%h EX_alu_result=%h MEM_alu_result=%h WB_write_data=%h WB_rd=%0d WB_reg_write=%b",
+                      cycle_count,
+                      dut.f_pc,
+                      dut.f_instruction,
+                      dut.d_instruction,
+                      dut.e_alu_result,
+                      dut.m_alu_result,
+                      dut.w_write_data,
+                      dut.w_rd,
+                      dut.w_reg_write);
+        end
+    end
+
+    // ------------------------------------------------------------------
+    // Halt detection: every test program ends with `jal x0, 0` (jump to
+    // self), which forms an infinite loop. Because branch/jump redirects
+    // resolve in EX (2-cycle bubble), the *fetch* PC does not settle on a
+    // single repeated value -- it cycles through the jal's address plus
+    // the 1-2 squashed fall-through addresses fetched before the flush
+    // lands. Raw PC-repeat detection is therefore unreliable.
+    //
+    // Instead we detect the halt idiom directly: the fixed encoding of
+    // `jal x0, 0` is the constant word 32'h0000006F. We count how many
+    // times this exact word appears at the ID stage (d_instruction) and
+    // declare the program halted once it has recurred HALT_REPEAT_THRESH
+    // times, which only happens if the CPU is spinning on the self-loop.
+    // ------------------------------------------------------------------
+    localparam logic [31:0] HALT_IDIOM = 32'h0000006F;
+
+    int halt_idiom_count;
+
+    always_ff @(posedge clk) begin
+        if (reset) begin
+            halt_idiom_count <= 0;
+            halted           <= 1'b0;
+        end
+        else if (!halted) begin
+            if (dut.d_instruction == HALT_IDIOM)
+                halt_idiom_count <= halt_idiom_count + 1;
+
+            if (halt_idiom_count + 1 >= HALT_REPEAT_THRESH)
+                halted <= 1'b1;
+        end
+    end
+
+    initial begin
+        $dumpfile("cpu_top_tb.vcd");
+        $dumpvars(0, cpu_top_tb);
+    end
+
+    // ------------------------------------------------------------------
+    // Register-file checking
+    //   expected_regs_file format: one entry per line, "<dec_regnum> <hex32>"
+    //   Only listed registers are checked; anything not listed is skipped.
+    // ------------------------------------------------------------------
+    task automatic check_registers();
+        int fd;
+        int rnum;
+        logic [31:0] expected_val;
+        logic [31:0] actual_val;
+        int local_checks;
+        int local_fails;
+        begin
+            local_checks = 0;
+            local_fails  = 0;
+
+            if (expected_regs_file == "") begin
+                $display("[%s] No expected_regs_file specified -- skipping register checks.", test_name);
+            end
+            else begin
+                fd = $fopen(expected_regs_file, "r");
+                if (fd == 0) begin
+                    $display("[%s] WARNING: could not open %s -- skipping register checks.", test_name, expected_regs_file);
+                end
+                else begin
+                    while ($fscanf(fd, "%d %h", rnum, expected_val) == 2) begin
+                        actual_val = dut.u_register_file.regs[rnum];
+                        local_checks++;
+                        if (actual_val !== expected_val) begin
+                            local_fails++;
+                            $display("[%s] FAIL  x%0d: expected=%08h actual=%08h", test_name, rnum, expected_val, actual_val);
+                        end
+                        else begin
+                            $display("[%s] PASS  x%0d: %08h", test_name, rnum, actual_val);
+                        end
+                    end
+                    $fclose(fd);
+                end
+            end
+
+            total_checks  += local_checks;
+            failed_checks += local_fails;
+        end
+    endtask
+
+    // ------------------------------------------------------------------
+    // Data-memory checking
+    //   expected_mem_file format: one entry per line, "<hex_byteaddr> <hex32>"
+    //   Value is the expected little-endian 32-bit word at that byte address.
+    // ------------------------------------------------------------------
+    task automatic check_memory();
+        int fd;
+        logic [31:0] addr;
+        logic [31:0] expected_val;
+        logic [31:0] actual_val;
+        int local_checks;
+        int local_fails;
+        begin
+            local_checks = 0;
+            local_fails  = 0;
+
+            if (expected_mem_file == "") begin
+                $display("[%s] No expected_mem_file specified -- skipping memory checks.", test_name);
+            end
+            else begin
+                fd = $fopen(expected_mem_file, "r");
+                if (fd == 0) begin
+                    $display("[%s] WARNING: could not open %s -- skipping memory checks.", test_name, expected_mem_file);
+                end
+                else begin
+                    while ($fscanf(fd, "%h %h", addr, expected_val) == 2) begin
+                        actual_val = { dut.u_data_memory.mem[addr+3], dut.u_data_memory.mem[addr+2],
+                                       dut.u_data_memory.mem[addr+1], dut.u_data_memory.mem[addr] };
+                        local_checks++;
+                        if (actual_val !== expected_val) begin
+                            local_fails++;
+                            $display("[%s] FAIL  mem[%0h]: expected=%08h actual=%08h", test_name, addr, expected_val, actual_val);
+                        end
+                        else begin
+                            $display("[%s] PASS  mem[%0h]: %08h", test_name, addr, actual_val);
+                        end
+                    end
+                    $fclose(fd);
+                end
+            end
+
+            total_checks  += local_checks;
+            failed_checks += local_fails;
+        end
+    endtask
+
+    task automatic print_register_file();
+        int i;
+        begin
+            $display("---------------------------------------------");
+            $display("[%s] Final register file contents:", test_name);
+            for (i = 0; i < 32; i++) begin
+                $display("  x%0d = %h (%0d)", i, dut.u_register_file.regs[i], $signed(dut.u_register_file.regs[i]));
+            end
+            $display("---------------------------------------------");
+        end
+    endtask
+
+    initial begin
+        if (!$value$plusargs("MAXCYCLES=%d", max_cycles))
+            max_cycles = DEFAULT_MAX_CYCLES;
+
+        debug_en = $test$plusargs("DEBUG");
+
+        if (!$value$plusargs("TESTNAME=%s", test_name))
+            test_name = "unnamed_test";
+
+        if (!$value$plusargs("EXPECTED_REGS=%s", expected_regs_file))
+            expected_regs_file = "";
+
+        if (!$value$plusargs("EXPECTED_MEM=%s", expected_mem_file))
+            expected_mem_file = "";
+
+        total_checks  = 0;
+        failed_checks = 0;
+        sim_timed_out = 1'b0;
+
+        wait (reset == 1'b0);
+
+        fork
+            begin : wait_for_halt
+                wait (halted == 1'b1);
+            end
+            begin : wait_for_timeout
+                repeat (max_cycles) @(posedge clk);
+                sim_timed_out = 1'b1;
+            end
+        join_any
+        disable fork;
+
+        $display("===============================================");
+        if (sim_timed_out) begin
+            $display("[%s] TIMEOUT: program did not halt within %0d cycles.", test_name, max_cycles);
+        end
+        else begin
+            $display("[%s] Halt detected at cycle %0d (jal x0,0 self-loop observed).", test_name, cycle_count);
+        end
+
+        // Give any in-flight writeback extra cycles to settle before checking.
+        repeat (5) @(posedge clk);
+
+        check_registers();
+        check_memory();
+
+        if (debug_en)
+            print_register_file();
+
+        $display("===============================================");
+        if (sim_timed_out || failed_checks > 0) begin
+            $display("[%s] RESULT: FAIL  (%0d/%0d checks passed, timeout=%0b)",
+                      test_name, (total_checks - failed_checks), total_checks, sim_timed_out);
+        end
+        else begin
+            $display("[%s] RESULT: PASS  (%0d/%0d checks passed)",
+                      test_name, total_checks, total_checks);
+        end
+        $display("===============================================");
+
+        $finish;
+    end
+
+endmodule
