@@ -1,1 +1,1 @@
-
+`cpu_top_tb.sv` is the self-checking integration testbench. Run it with `./scripts/sim.sh`. Its short hand-coded regression image is embedded in the testbench and is not the user's final demonstration program.

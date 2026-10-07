@@ -1,1 +1,1 @@
-
+The reproducible integration waveform is generated at `build/cpu_top_tb.vcd` by `./scripts/sim.sh`. Open it with `gtkwave build/cpu_top_tb.vcd`. It includes the testbench and DUT hierarchy, with PC/instruction flow, pipeline state, register file, ALU/forwarding, hazard stall, memory, and writeback activity. `build/` is generated output and can be recreated by rerunning the script.

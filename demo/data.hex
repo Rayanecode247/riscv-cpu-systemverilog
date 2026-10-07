@@ -1,0 +1,24 @@
+// Byte-addressed, little-endian data RAM image.
+// Input array at byte addresses 0, 4, 8, 12, 16:
+//   words: 8, 3, 10, 1, 6
+// Each byte is one line; the remaining RAM bytes are initialized to zero.
+08
+00
+00
+00
+03
+00
+00
+00
+0a
+00
+00
+00
+01
+00
+00
+00
+06
+00
+00
+00

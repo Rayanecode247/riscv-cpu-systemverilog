@@ -1,0 +1,33 @@
+[*] GTKWave Analyzer v3.3.118
+[dumpfile] "build/demo_sort.vcd"
+[savefile] "demo/sort_demo.gtkw"
+[treeopen] demo_tb.
+@28
+demo_tb.clk
+demo_tb.reset
+demo_tb.cycles[31:0]
+demo_tb.halted
+demo_tb.debug_pc[31:0]
+demo_tb.debug_instruction[31:0]
+demo_tb.debug_load_stall
+demo_tb.debug_forward_a[1:0]
+demo_tb.debug_forward_b[1:0]
+demo_tb.debug_mem_write
+demo_tb.debug_mem_address[31:0]
+demo_tb.debug_mem_write_data[31:0]
+demo_tb.debug_wb_reg_write
+demo_tb.debug_wb_rd[4:0]
+demo_tb.debug_wb_data[31:0]
+demo_tb.dut.f_pc[31:0]
+demo_tb.dut.d_pc[31:0]
+demo_tb.dut.d_instruction[31:0]
+demo_tb.dut.e_pc[31:0]
+demo_tb.dut.e_alu_result[31:0]
+demo_tb.dut.e_branch_taken
+demo_tb.dut.e_redirect_target[31:0]
+demo_tb.dut.m_mem_write
+demo_tb.dut.m_alu_result[31:0]
+demo_tb.dut.m_write_data[31:0]
+demo_tb.dut.w_reg_write
+demo_tb.dut.w_rd[4:0]
+demo_tb.dut.w_write_data[31:0]

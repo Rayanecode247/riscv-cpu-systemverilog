@@ -13,6 +13,9 @@ module instruction_memory #(
     logic [$clog2(DEPTH)-1:0] word_addr;
 
     initial begin
+        for (int i = 0; i < DEPTH; i++) begin
+            mem[i] = NOP;
+        end
         $readmemh("instructions.hex", mem);
     end
 

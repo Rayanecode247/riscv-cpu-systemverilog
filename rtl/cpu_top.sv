@@ -3,7 +3,18 @@ module cpu_top #(
     parameter int DMEM_DEPTH = 1024
 )(
     input logic clk,
-    input logic reset
+    input logic reset,
+    output logic [31:0] debug_pc,
+    output logic [31:0] debug_instruction,
+    output logic        debug_load_stall,
+    output logic [1:0]  debug_forward_a,
+    output logic [1:0]  debug_forward_b,
+    output logic        debug_wb_reg_write,
+    output logic [4:0]  debug_wb_rd,
+    output logic [31:0] debug_wb_data,
+    output logic        debug_mem_write,
+    output logic [31:0] debug_mem_address,
+    output logic [31:0] debug_mem_write_data
 );
 
     logic [31:0] f_pc;
@@ -277,7 +288,9 @@ module cpu_top #(
     assign e_branch_taken = e_branch & (e_funct3[0] ? ~e_zero : e_zero);
 
     assign e_redirect_valid   = e_jump | e_branch_taken;
-    assign e_redirect_target  = e_jump ? e_alu_result : e_branch_target;
+    assign e_redirect_target  = e_jump ?
+                                ((e_alu_src_a == 2'b00) ? {e_alu_result[31:1], 1'b0} : e_alu_result) :
+                                e_branch_target;
     assign pc_redirect_valid  = e_redirect_valid;
     assign pc_redirect_target = e_redirect_target;
 
@@ -356,5 +369,19 @@ module cpu_top #(
             default: w_write_data = w_alu_result;
         endcase
     end
+
+    // Stable top-level observability for simulation, board-level debugging,
+    // and synthesis of a non-empty core with externally visible activity.
+    assign debug_pc             = f_pc;
+    assign debug_instruction    = f_instruction;
+    assign debug_load_stall     = hazard_stall;
+    assign debug_forward_a      = e_forward_a;
+    assign debug_forward_b      = e_forward_b;
+    assign debug_wb_reg_write   = w_reg_write;
+    assign debug_wb_rd          = w_rd;
+    assign debug_wb_data        = w_write_data;
+    assign debug_mem_write      = m_mem_write;
+    assign debug_mem_address    = m_alu_result;
+    assign debug_mem_write_data = m_write_data;
 
 endmodule

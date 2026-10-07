@@ -1,1 +1,1 @@
-
+RTL source is compiled by `scripts/sim.sh` and `scripts/synth.sh`. `cpu_top` is the core top module. `instruction_memory` reads `instructions.hex` relative to the process working directory. See `docs/README.md` for the module map and implementation limits.
